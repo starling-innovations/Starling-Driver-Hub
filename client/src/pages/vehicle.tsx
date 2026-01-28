@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Truck } from "lucide-react";
+import { ArrowLeft, Save, Truck, Camera, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { DriverProfile } from "@shared/schema";
@@ -25,9 +25,11 @@ import type { DriverProfile } from "@shared/schema";
 const vehicleSchema = z.object({
   vehicleMake: z.string().min(1, "Vehicle make is required"),
   vehicleModel: z.string().min(1, "Vehicle model is required"),
-  vehicleYear: z.string().optional(),
-  vehicleColor: z.string().optional(),
-  licensePlate: z.string().optional(),
+  vehicleYear: z.string().min(1, "Vehicle year is required"),
+  vehicleColor: z.string().min(1, "Vehicle color is required"),
+  licensePlate: z.string().min(1, "License plate is required"),
+  vehiclePhotoUrl: z.string().optional(),
+  licensePlatePhotoUrl: z.string().optional(),
 });
 
 export default function VehiclePage() {
@@ -35,6 +37,11 @@ export default function VehiclePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [vehiclePhoto, setVehiclePhoto] = useState<string | null>(null);
+  const [licensePlatePhoto, setLicensePlatePhoto] = useState<string | null>(null);
+  const vehiclePhotoRef = useRef<HTMLInputElement>(null);
+  const licensePlatePhotoRef = useRef<HTMLInputElement>(null);
 
   const { data: profile, isLoading: profileLoading } = useQuery<DriverProfile | null>({
     queryKey: ["/api/profile"],
@@ -49,6 +56,8 @@ export default function VehiclePage() {
       vehicleYear: "",
       vehicleColor: "",
       licensePlate: "",
+      vehiclePhotoUrl: "",
+      licensePlatePhotoUrl: "",
     },
   });
 
@@ -60,9 +69,46 @@ export default function VehiclePage() {
         vehicleYear: profile.vehicleYear || "",
         vehicleColor: profile.vehicleColor || "",
         licensePlate: profile.licensePlate || "",
+        vehiclePhotoUrl: profile.vehiclePhotoUrl || "",
+        licensePlatePhotoUrl: profile.licensePlatePhotoUrl || "",
       });
+      if (profile.vehiclePhotoUrl) setVehiclePhoto(profile.vehiclePhotoUrl);
+      if (profile.licensePlatePhotoUrl) setLicensePlatePhoto(profile.licensePlatePhotoUrl);
     }
   }, [profile]);
+
+  const handlePhotoCapture = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    type: 'vehicle' | 'licensePlate'
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        if (type === 'vehicle') {
+          setVehiclePhoto(base64);
+          form.setValue("vehiclePhotoUrl", base64);
+        } else {
+          setLicensePlatePhoto(base64);
+          form.setValue("licensePlatePhotoUrl", base64);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePhoto = (type: 'vehicle' | 'licensePlate') => {
+    if (type === 'vehicle') {
+      setVehiclePhoto(null);
+      form.setValue("vehiclePhotoUrl", "");
+      if (vehiclePhotoRef.current) vehiclePhotoRef.current.value = "";
+    } else {
+      setLicensePlatePhoto(null);
+      form.setValue("licensePlatePhotoUrl", "");
+      if (licensePlatePhotoRef.current) licensePlatePhotoRef.current.value = "";
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async (data: z.infer<typeof vehicleSchema>) => {
@@ -233,6 +279,116 @@ export default function VehiclePage() {
                           {...field} 
                           data-testid="input-license-plate"
                         />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">Vehicle Photos</CardTitle>
+                <CardDescription>Photos of your vehicle and license plate</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="vehiclePhotoUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Photo of Your Vehicle</FormLabel>
+                      <FormControl>
+                        <div>
+                          {vehiclePhoto ? (
+                            <div className="relative">
+                              <img 
+                                src={vehiclePhoto} 
+                                alt="Vehicle" 
+                                className="w-full h-48 object-cover rounded-md"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-2 right-2"
+                                onClick={() => removePhoto('vehicle')}
+                                data-testid="button-remove-vehicle-photo"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div 
+                              className="border-2 border-dashed rounded-md p-8 text-center cursor-pointer hover-elevate"
+                              onClick={() => vehiclePhotoRef.current?.click()}
+                            >
+                              <Camera className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground">Tap to take a photo of your vehicle</p>
+                            </div>
+                          )}
+                          <input
+                            ref={vehiclePhotoRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={(e) => handlePhotoCapture(e, 'vehicle')}
+                            data-testid="input-vehicle-photo"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="licensePlatePhotoUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Photo of License Plate</FormLabel>
+                      <FormControl>
+                        <div>
+                          {licensePlatePhoto ? (
+                            <div className="relative">
+                              <img 
+                                src={licensePlatePhoto} 
+                                alt="License Plate" 
+                                className="w-full h-48 object-cover rounded-md"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-2 right-2"
+                                onClick={() => removePhoto('licensePlate')}
+                                data-testid="button-remove-license-photo"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div 
+                              className="border-2 border-dashed rounded-md p-8 text-center cursor-pointer hover-elevate"
+                              onClick={() => licensePlatePhotoRef.current?.click()}
+                            >
+                              <Camera className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground">Tap to take a photo of your license plate</p>
+                            </div>
+                          )}
+                          <input
+                            ref={licensePlatePhotoRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={(e) => handlePhotoCapture(e, 'licensePlate')}
+                            data-testid="input-license-photo"
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
