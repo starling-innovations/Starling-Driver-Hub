@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -16,29 +18,45 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { ArrowLeft, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { DriverProfile } from "@shared/schema";
 
+const canadianPhoneRegex = /^(\+1)?[\s.-]?\(?[2-9]\d{2}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/;
+
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
-  phone: z.string().optional(),
+  phone: z.string()
+    .min(1, "Phone number is required")
+    .regex(canadianPhoneRegex, "Please enter a valid Canadian phone number (e.g., 416-555-1234)"),
   etransferEmail: z.string().email("Valid e-transfer email is required"),
-  streetAddress: z.string().optional(),
-  city: z.string().optional(),
-  province: z.string().optional(),
-  postalCode: z.string().optional(),
+  etransferAutoDepositConfirmed: z.boolean(),
+  streetAddress: z.string().min(1, "Street address is required"),
+  city: z.string().min(1, "City is required"),
+  province: z.string().min(1, "Province is required"),
+  postalCode: z.string().min(1, "Postal code is required"),
+  googlePlaceId: z.string().optional(),
 });
+
+interface PlacePrediction {
+  place_id: string;
+  description: string;
+}
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [addressInput, setAddressInput] = useState("");
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [showPredictions, setShowPredictions] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useQuery<DriverProfile | null>({
     queryKey: ["/api/profile"],
@@ -53,10 +71,12 @@ export default function ProfilePage() {
       email: "",
       phone: "",
       etransferEmail: "",
+      etransferAutoDepositConfirmed: false,
       streetAddress: "",
       city: "",
       province: "",
       postalCode: "",
+      googlePlaceId: "",
     },
   });
 
@@ -68,13 +88,102 @@ export default function ProfilePage() {
         email: profile.email || "",
         phone: profile.phone || "",
         etransferEmail: profile.etransferEmail || "",
+        etransferAutoDepositConfirmed: profile.etransferAutoDepositConfirmed || false,
         streetAddress: profile.streetAddress || "",
         city: profile.city || "",
         province: profile.province || "",
         postalCode: profile.postalCode || "",
+        googlePlaceId: profile.googlePlaceId || "",
       });
+      if (profile.streetAddress) {
+        setAddressInput(`${profile.streetAddress}, ${profile.city}, ${profile.province} ${profile.postalCode}`);
+      }
     }
   }, [profile]);
+
+  const fetchPredictions = useCallback(async (input: string) => {
+    if (input.length < 3) {
+      setPredictions([]);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(input)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (data.predictions) {
+        setPredictions(data.predictions);
+      }
+    } catch (error) {
+      console.error("Error fetching predictions:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (addressInput && showPredictions) {
+        fetchPredictions(addressInput);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [addressInput, showPredictions, fetchPredictions]);
+
+  const selectPlace = async (prediction: PlacePrediction) => {
+    try {
+      const response = await fetch(`/api/places/details?placeId=${encodeURIComponent(prediction.place_id)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      
+      if (data.result?.address_components) {
+        const components = data.result.address_components;
+        let streetNumber = "";
+        let route = "";
+        let city = "";
+        let province = "";
+        let postalCode = "";
+
+        for (const component of components) {
+          if (component.types.includes("street_number")) {
+            streetNumber = component.long_name;
+          } else if (component.types.includes("route")) {
+            route = component.long_name;
+          } else if (component.types.includes("locality")) {
+            city = component.long_name;
+          } else if (component.types.includes("administrative_area_level_1")) {
+            province = component.long_name;
+          } else if (component.types.includes("postal_code")) {
+            postalCode = component.long_name;
+          }
+        }
+
+        const streetAddress = `${streetNumber} ${route}`.trim();
+        form.setValue("streetAddress", streetAddress);
+        form.setValue("city", city);
+        form.setValue("province", province);
+        form.setValue("postalCode", postalCode);
+        form.setValue("googlePlaceId", prediction.place_id);
+        setAddressInput(prediction.description);
+      }
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+    }
+    setPredictions([]);
+    setShowPredictions(false);
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    const cleaned = value.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    if (match) {
+      const parts = [match[1], match[2], match[3]].filter(Boolean);
+      if (parts.length === 0) return '';
+      if (parts.length === 1) return parts[0];
+      if (parts.length === 2) return `${parts[0]}-${parts[1]}`;
+      return `${parts[0]}-${parts[1]}-${parts[2]}`;
+    }
+    return value;
+  };
 
   const saveMutation = useMutation({
     mutationFn: async (data: z.infer<typeof profileSchema>) => {
@@ -211,14 +320,20 @@ export default function ProfilePage() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone</FormLabel>
+                      <FormLabel>Phone Number</FormLabel>
                       <FormControl>
                         <Input 
-                          type="tel" 
-                          {...field} 
+                          type="tel"
+                          placeholder="416-555-1234"
+                          {...field}
+                          onChange={(e) => {
+                            const formatted = formatPhoneNumber(e.target.value);
+                            field.onChange(formatted);
+                          }}
                           data-testid="input-phone"
                         />
                       </FormControl>
+                      <FormDescription>Canadian phone number required</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -236,7 +351,31 @@ export default function ProfilePage() {
                           data-testid="input-etransfer-email"
                         />
                       </FormControl>
+                      <FormDescription>Email for receiving weekly payments</FormDescription>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="etransferAutoDepositConfirmed"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-auto-deposit"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          I confirm this email has auto-deposit enabled
+                        </FormLabel>
+                        <FormDescription>
+                          Auto-deposit must be enabled to receive payments automatically
+                        </FormDescription>
+                      </div>
                     </FormItem>
                   )}
                 />
@@ -249,6 +388,35 @@ export default function ProfilePage() {
                 <CardDescription>Your current address</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="relative">
+                  <Label>Search Address</Label>
+                  <Input
+                    placeholder="Start typing your address..."
+                    value={addressInput}
+                    onChange={(e) => {
+                      setAddressInput(e.target.value);
+                      setShowPredictions(true);
+                    }}
+                    onFocus={() => setShowPredictions(true)}
+                    data-testid="input-address-search"
+                  />
+                  {showPredictions && predictions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {predictions.map((prediction) => (
+                        <button
+                          key={prediction.place_id}
+                          type="button"
+                          className="w-full px-4 py-3 text-left text-sm hover-elevate border-b last:border-b-0"
+                          onClick={() => selectPlace(prediction)}
+                          data-testid={`place-${prediction.place_id}`}
+                        >
+                          {prediction.description}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <FormField
                   control={form.control}
                   name="streetAddress"
