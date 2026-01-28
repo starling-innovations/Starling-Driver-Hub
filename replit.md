@@ -1,0 +1,90 @@
+# Starling Driver Partners
+
+A mobile-first webapp for Starling Driver Partners that allows delivery drivers to create secure accounts, manage their profiles, and complete the onboarding process.
+
+## Overview
+
+This application provides:
+- **Secure Authentication**: Login with Google, GitHub, Apple, email via Replit Auth
+- **Driver Profiles**: Personal info, address, e-transfer email, vehicle details
+- **Onboarding Wizard**: Step-by-step guide for new drivers
+- **Agreement Signing**: Digital signing of Driver Partner Onboarding Agreement
+
+## Tech Stack
+
+- **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui
+- **Backend**: Express.js + Node.js
+- **Database**: PostgreSQL with Drizzle ORM
+- **Authentication**: Replit Auth (OpenID Connect)
+- **Routing**: wouter
+- **State Management**: TanStack Query
+
+## Project Structure
+
+```
+client/
+  src/
+    pages/
+      landing.tsx      - Landing page for logged-out users
+      dashboard.tsx    - Main dashboard for logged-in drivers
+      onboarding.tsx   - 4-step onboarding wizard
+      profile.tsx      - Edit personal info and address
+      vehicle.tsx      - Edit vehicle information
+      agreement.tsx    - View/sign partner agreement
+    hooks/
+      use-auth.ts      - Authentication hook
+    lib/
+      queryClient.ts   - TanStack Query configuration
+      auth-utils.ts    - Auth utility functions
+
+server/
+  routes.ts            - API endpoints
+  storage.ts           - Database operations
+  db.ts                - Database connection
+  replit_integrations/
+    auth/              - Replit Auth integration
+
+shared/
+  schema.ts            - Drizzle schemas & types
+  models/
+    auth.ts            - User & session models
+```
+
+## Key Features
+
+### Onboarding Flow (4 Steps)
+1. **Personal Info**: Name, email, phone, e-transfer email
+2. **Address**: Street address, city, province, postal code
+3. **Vehicle**: Make, model, year, color, license plate
+4. **Agreement**: Review and sign the Driver Partner Agreement
+
+### Database Schema
+
+**driver_profiles**
+- Personal information (name, email, phone)
+- Address details
+- E-transfer email for payments
+- Vehicle information
+- Onboarding progress tracking
+- Agreement signing status
+
+## API Endpoints
+
+- `GET /api/profile` - Get current driver's profile
+- `POST /api/profile` - Create new driver profile
+- `PATCH /api/profile` - Update driver profile
+- `GET /api/auth/user` - Get authenticated user
+- `GET /api/login` - Initiate login flow
+- `GET /api/logout` - Logout and end session
+
+## Development
+
+The application runs with `npm run dev` which starts both the Express backend and Vite frontend on port 5000.
+
+## Design
+
+- Mobile-first responsive design
+- Blue primary color scheme (#3b82f6)
+- Clean, professional appearance
+- Card-based UI components
+- Progress indicators for onboarding
