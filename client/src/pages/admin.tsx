@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, CheckCircle, XCircle, Clock, Users, UserCheck, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Clock, Users, UserCheck, AlertCircle, Loader2, ShieldCheck } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserWithProfile {
   user: {
@@ -26,6 +28,7 @@ interface UserWithProfile {
     onboardingStep: number;
     agreementSigned: boolean;
     onfleetId: string | null;
+    approvalStatus: string | null;
     createdAt: string | null;
   } | null;
 }
@@ -77,13 +80,57 @@ function getOnboardingStatus(profile: UserWithProfile["profile"]): {
 }
 
 export default function AdminPage() {
+  const { toast } = useToast();
   const { data: usersWithProfiles, isLoading } = useQuery<UserWithProfile[]>({
     queryKey: ["/api/admin/users"],
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (profileId: string) => {
+      await apiRequest("POST", `/api/admin/approve/${profileId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Driver Approved",
+        description: "The driver has been approved and synced to Onfleet.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to approve driver.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (profileId: string) => {
+      await apiRequest("POST", `/api/admin/reject/${profileId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Driver Rejected",
+        description: "The driver application has been rejected.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to reject driver.",
+        variant: "destructive",
+      });
+    },
   });
 
   const totalUsers = usersWithProfiles?.length || 0;
   const completedOnboarding = usersWithProfiles?.filter(
     (u) => u.profile?.onboardingCompleted
+  ).length || 0;
+  const pendingApproval = usersWithProfiles?.filter(
+    (u) => u.profile?.onboardingCompleted && u.profile?.approvalStatus === "pending"
   ).length || 0;
   const inProgress = usersWithProfiles?.filter(
     (u) => u.profile && !u.profile.onboardingCompleted
@@ -95,8 +142,8 @@ export default function AdminPage() {
       <div className="min-h-screen bg-background p-4">
         <div className="max-w-6xl mx-auto space-y-6">
           <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
               <Skeleton key={i} className="h-24" />
             ))}
           </div>
@@ -120,7 +167,7 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -144,6 +191,20 @@ export default function AdminPage() {
                 <div>
                   <p className="text-2xl font-bold" data-testid="text-completed-users">{completedOnboarding}</p>
                   <p className="text-sm text-muted-foreground">Completed</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                  <ShieldCheck className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold" data-testid="text-pending-approval">{pendingApproval}</p>
+                  <p className="text-sm text-muted-foreground">Pending Approval</p>
                 </div>
               </div>
             </CardContent>
@@ -192,7 +253,9 @@ export default function AdminPage() {
                     <th className="pb-3 font-medium text-muted-foreground">Phone</th>
                     <th className="pb-3 font-medium text-muted-foreground">Last Login</th>
                     <th className="pb-3 font-medium text-muted-foreground">Onboarding</th>
+                    <th className="pb-3 font-medium text-muted-foreground">Approval</th>
                     <th className="pb-3 font-medium text-muted-foreground">Onfleet</th>
+                    <th className="pb-3 font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -249,6 +312,28 @@ export default function AdminPage() {
                           </Badge>
                         </td>
                         <td className="py-4">
+                          {!item.profile ? (
+                            <Badge variant="outline" className="text-muted-foreground">-</Badge>
+                          ) : item.profile.approvalStatus === "approved" ? (
+                            <Badge variant="default" className="gap-1" data-testid={`badge-approval-${item.user.id}`}>
+                              <CheckCircle className="h-3 w-3" />
+                              Approved
+                            </Badge>
+                          ) : item.profile.approvalStatus === "rejected" ? (
+                            <Badge variant="destructive" className="gap-1" data-testid={`badge-approval-${item.user.id}`}>
+                              <XCircle className="h-3 w-3" />
+                              Rejected
+                            </Badge>
+                          ) : item.profile.onboardingCompleted ? (
+                            <Badge variant="secondary" className="gap-1" data-testid={`badge-approval-${item.user.id}`}>
+                              <Clock className="h-3 w-3" />
+                              Pending
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">-</Badge>
+                          )}
+                        </td>
+                        <td className="py-4">
                           {item.profile?.onfleetId ? (
                             <Badge variant="outline" className="gap-1" data-testid={`badge-onfleet-${item.user.id}`}>
                               <CheckCircle className="h-3 w-3 text-green-500" />
@@ -259,6 +344,43 @@ export default function AdminPage() {
                               <XCircle className="h-3 w-3" />
                               Not synced
                             </Badge>
+                          )}
+                        </td>
+                        <td className="py-4">
+                          {item.profile?.onboardingCompleted && item.profile?.approvalStatus === "pending" && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => approveMutation.mutate(item.profile!.id)}
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                data-testid={`button-approve-${item.user.id}`}
+                              >
+                                {approveMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Approve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => rejectMutation.mutate(item.profile!.id)}
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                data-testid={`button-reject-${item.user.id}`}
+                              >
+                                {rejectMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Reject
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </tr>

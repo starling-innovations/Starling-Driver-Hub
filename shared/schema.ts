@@ -33,6 +33,9 @@ export const driverProfiles = pgTable("driver_profiles", {
   agreementSignedAt: timestamp("agreement_signed_at"),
   onfleetId: text("onfleet_id"),
   onfleetSyncedAt: timestamp("onfleet_synced_at"),
+  approvalStatus: varchar("approval_status").default("pending"), // pending, approved, rejected
+  approvedAt: timestamp("approved_at"),
+  approvedBy: text("approved_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

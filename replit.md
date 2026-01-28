@@ -17,7 +17,8 @@ This application provides:
 - **Google Places API**: Address autocomplete with Canadian addresses only
 - **Vehicle Photos**: Required photos of vehicle and license plate (base64 stored)
 - **Dropbox Sign**: Agreement must be signed at https://app.hellosign.com/s/EzWAyRrV
-- **Onfleet Integration**: Sync drivers to Onfleet when onboarding completes
+- **Admin Approval**: New drivers require admin approval before Onfleet sync
+- **Onfleet Integration**: Sync drivers to Onfleet after admin approval
 
 ## Tech Stack
 

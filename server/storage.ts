@@ -25,6 +25,7 @@ export interface IStorage {
   getDriverProfileByOnfleetId(onfleetId: string): Promise<DriverProfile | undefined>;
   createDriverProfile(profile: InsertDriverProfile): Promise<DriverProfile>;
   updateDriverProfile(userId: string, data: UpdateDriverProfile): Promise<DriverProfile | undefined>;
+  updateDriverProfileById(profileId: string, data: UpdateDriverProfile): Promise<DriverProfile | undefined>;
   getAllUsersWithProfiles(): Promise<UserWithProfile[]>;
   updateUserLastLogin(userId: string): Promise<void>;
   
@@ -58,6 +59,15 @@ export class DatabaseStorage implements IStorage {
       .update(driverProfiles)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(driverProfiles.userId, userId))
+      .returning();
+    return updated || undefined;
+  }
+
+  async updateDriverProfileById(profileId: string, data: UpdateDriverProfile): Promise<DriverProfile | undefined> {
+    const [updated] = await db
+      .update(driverProfiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(driverProfiles.id, profileId))
       .returning();
     return updated || undefined;
   }

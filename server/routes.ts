@@ -160,40 +160,13 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Profile not found" });
       }
 
-      if (updatedProfile.onboardingCompleted && updatedProfile.phone) {
-        try {
-          const syncResult = await syncDriverToOnfleet({
-            firstName: updatedProfile.firstName,
-            lastName: updatedProfile.lastName,
-            phone: updatedProfile.phone,
-            streetAddress: updatedProfile.streetAddress,
-            city: updatedProfile.city,
-            province: updatedProfile.province,
-            postalCode: updatedProfile.postalCode,
-            googlePlaceId: updatedProfile.googlePlaceId,
-            vehicleMake: updatedProfile.vehicleMake,
-            vehicleModel: updatedProfile.vehicleModel,
-            vehicleYear: updatedProfile.vehicleYear,
-            vehicleColor: updatedProfile.vehicleColor,
-            licensePlate: updatedProfile.licensePlate,
-          });
-
-          if (syncResult.success && syncResult.onfleetId) {
-            updatedProfile = await storage.updateDriverProfile(userId, {
-              onfleetId: syncResult.onfleetId,
-              onfleetSyncedAt: new Date(),
-            });
-            console.log(
-              `Driver ${userId} synced to Onfleet: ${syncResult.onfleetId} (${
-                syncResult.isExisting ? "existing" : "new"
-              } worker)`
-            );
-          } else {
-            console.error(`Failed to sync driver ${userId} to Onfleet:`, syncResult.error);
-          }
-        } catch (onfleetError) {
-          console.error("Onfleet sync error:", onfleetError);
-        }
+      // When onboarding completes, driver stays in "pending" approval status
+      // Admin must approve before syncing to Onfleet
+      if (updatedProfile.onboardingCompleted && !updatedProfile.approvalStatus) {
+        updatedProfile = await storage.updateDriverProfile(userId, {
+          approvalStatus: "pending",
+        });
+        console.log(`Driver ${userId} onboarding completed - pending admin approval`);
       }
       
       res.json(updatedProfile);
@@ -259,6 +232,96 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching admin users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Admin approval endpoints
+  app.post("/api/admin/approve/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const adminUserId = req.user.claims.sub;
+      
+      const profile = await storage.getDriverProfileById(profileId);
+      if (!profile) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      if (profile.approvalStatus === "approved") {
+        return res.status(400).json({ message: "Driver already approved" });
+      }
+      
+      // Update approval status
+      let updatedProfile = await storage.updateDriverProfileById(profileId, {
+        approvalStatus: "approved",
+        approvedAt: new Date(),
+        approvedBy: adminUserId,
+      });
+      
+      // Sync to Onfleet now that driver is approved
+      if (updatedProfile && updatedProfile.phone) {
+        try {
+          const syncResult = await syncDriverToOnfleet({
+            firstName: updatedProfile.firstName,
+            lastName: updatedProfile.lastName,
+            phone: updatedProfile.phone,
+            streetAddress: updatedProfile.streetAddress,
+            city: updatedProfile.city,
+            province: updatedProfile.province,
+            postalCode: updatedProfile.postalCode,
+            googlePlaceId: updatedProfile.googlePlaceId,
+            vehicleMake: updatedProfile.vehicleMake,
+            vehicleModel: updatedProfile.vehicleModel,
+            vehicleYear: updatedProfile.vehicleYear,
+            vehicleColor: updatedProfile.vehicleColor,
+            licensePlate: updatedProfile.licensePlate,
+          });
+
+          if (syncResult.success && syncResult.onfleetId) {
+            updatedProfile = await storage.updateDriverProfileById(profileId, {
+              onfleetId: syncResult.onfleetId,
+              onfleetSyncedAt: new Date(),
+            });
+            console.log(
+              `Driver ${profileId} approved and synced to Onfleet: ${syncResult.onfleetId} (${
+                syncResult.isExisting ? "existing" : "new"
+              } worker)`
+            );
+          } else {
+            console.error(`Failed to sync approved driver ${profileId} to Onfleet:`, syncResult.error);
+          }
+        } catch (onfleetError) {
+          console.error("Onfleet sync error:", onfleetError);
+        }
+      }
+      
+      res.json(updatedProfile);
+    } catch (error) {
+      console.error("Error approving driver:", error);
+      res.status(500).json({ message: "Failed to approve driver" });
+    }
+  });
+
+  app.post("/api/admin/reject/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const adminUserId = req.user.claims.sub;
+      
+      const profile = await storage.getDriverProfileById(profileId);
+      if (!profile) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      const updatedProfile = await storage.updateDriverProfileById(profileId, {
+        approvalStatus: "rejected",
+        approvedAt: new Date(),
+        approvedBy: adminUserId,
+      });
+      
+      console.log(`Driver ${profileId} rejected by admin ${adminUserId}`);
+      res.json(updatedProfile);
+    } catch (error) {
+      console.error("Error rejecting driver:", error);
+      res.status(500).json({ message: "Failed to reject driver" });
     }
   });
 
