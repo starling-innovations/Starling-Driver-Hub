@@ -82,6 +82,19 @@ shared/
 - Drivers can mark available/unavailable with packaging info
 - Responses stored locally and synced to admin app
 
+### Admin Approval & Identity Verification
+
+1. **Driver completes onboarding** → Status becomes "pending approval"
+2. **Admin approves account** → Driver can start identity verification
+3. **Driver completes Stripe Identity verification** → Driver synced to Onfleet
+4. **Driver is ready to accept deliveries**
+
+**Admin emails with access:**
+- hello@trystarling.com
+- sarah@trystarling.com
+- katie@trystarling.com
+- francesco@trystarling.com
+
 ### Database Schema
 
 **driver_profiles**
@@ -91,6 +104,8 @@ shared/
 - Vehicle information
 - Onboarding progress tracking
 - Agreement signing status
+- Approval status (pending, approved, rejected)
+- Identity verification status (pending, verified, failed, requires_input)
 - Onfleet integration (onfleetId, onfleetSyncedAt)
 
 **driver_availability**
@@ -102,7 +117,7 @@ shared/
 
 ### Onfleet Integration
 
-When onboarding completes, the system syncs the driver to Onfleet:
+When identity verification completes, the system syncs the driver to Onfleet:
 1. **Check if worker exists** - Looks up by phone number using `GET /workers?phones=`
 2. **If exists** - Stores the Onfleet worker ID (existing drivers migrate seamlessly)
 3. **If not exists** - Creates a new worker with name, phone, vehicle details
@@ -110,6 +125,19 @@ When onboarding completes, the system syncs the driver to Onfleet:
 **Configuration:**
 - API Key: `STARLING_STAGING_API_KEY` (stored as secret)
 - Default Team: CookUnity Staging (`BPFsaTGXIHgF90hxup3XikF2`)
+
+### Stripe Identity Verification
+
+Drivers must complete identity verification after admin approval:
+- Uses Stripe Identity with document + selfie verification
+- Webhook endpoint: `/api/webhooks/stripe-identity` (configure in Stripe Dashboard)
+- Optional: Set `STRIPE_WEBHOOK_SECRET` for signature verification in production
+
+**Status Flow:**
+- pending: Verification documents being reviewed
+- verified: Identity confirmed, driver synced to Onfleet
+- requires_input: Action needed from driver
+- failed: Verification canceled or rejected
 
 ## API Endpoints
 

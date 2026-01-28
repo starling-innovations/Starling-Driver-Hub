@@ -29,6 +29,7 @@ interface UserWithProfile {
     agreementSigned: boolean;
     onfleetId: string | null;
     approvalStatus: string | null;
+    identityVerificationStatus: string | null;
     createdAt: string | null;
   } | null;
 }

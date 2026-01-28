@@ -1,10 +1,11 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { updateDriverProfileSchema } from "@shared/schema";
 import { z } from "zod";
 import { syncDriverToOnfleet } from "./onfleet";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
 const canadianPhoneRegex = /^(\+1)?[\s.-]?\(?[2-9]\d{2}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/;
 
@@ -266,54 +267,284 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Driver already approved" });
       }
       
-      // Update approval status
-      let updatedProfile = await storage.updateDriverProfileById(profileId, {
+      // Update approval status and set identity verification to pending
+      // Driver must complete identity verification before being synced to Onfleet
+      const updatedProfile = await storage.updateDriverProfileById(profileId, {
         approvalStatus: "approved",
         approvedAt: new Date(),
         approvedBy: adminUserId,
+        identityVerificationStatus: "pending",
       });
       
-      // Sync to Onfleet now that driver is approved
-      if (updatedProfile && updatedProfile.phone) {
-        try {
-          const syncResult = await syncDriverToOnfleet({
-            firstName: updatedProfile.firstName,
-            lastName: updatedProfile.lastName,
-            phone: updatedProfile.phone,
-            streetAddress: updatedProfile.streetAddress,
-            city: updatedProfile.city,
-            province: updatedProfile.province,
-            postalCode: updatedProfile.postalCode,
-            googlePlaceId: updatedProfile.googlePlaceId,
-            vehicleMake: updatedProfile.vehicleMake,
-            vehicleModel: updatedProfile.vehicleModel,
-            vehicleYear: updatedProfile.vehicleYear,
-            vehicleColor: updatedProfile.vehicleColor,
-            licensePlate: updatedProfile.licensePlate,
-          });
-
-          if (syncResult.success && syncResult.onfleetId) {
-            updatedProfile = await storage.updateDriverProfileById(profileId, {
-              onfleetId: syncResult.onfleetId,
-              onfleetSyncedAt: new Date(),
-            });
-            console.log(
-              `Driver ${profileId} approved and synced to Onfleet: ${syncResult.onfleetId} (${
-                syncResult.isExisting ? "existing" : "new"
-              } worker)`
-            );
-          } else {
-            console.error(`Failed to sync approved driver ${profileId} to Onfleet:`, syncResult.error);
-          }
-        } catch (onfleetError) {
-          console.error("Onfleet sync error:", onfleetError);
-        }
-      }
-      
+      console.log(`Driver ${profileId} approved - awaiting identity verification`);
       res.json(updatedProfile);
     } catch (error) {
       console.error("Error approving driver:", error);
       res.status(500).json({ message: "Failed to approve driver" });
+    }
+  });
+
+  // Stripe Identity verification endpoints
+  app.post("/api/identity/create-session", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getDriverProfile(userId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      
+      if (profile.approvalStatus !== "approved") {
+        return res.status(400).json({ message: "Account must be approved before identity verification" });
+      }
+      
+      if (profile.identityVerificationStatus === "verified") {
+        return res.status(400).json({ message: "Identity already verified" });
+      }
+      
+      const stripe = await getUncachableStripeClient();
+      
+      // Create Stripe Identity verification session
+      const verificationSession = await stripe.identity.verificationSessions.create({
+        type: "document",
+        metadata: {
+          userId: userId,
+          profileId: profile.id,
+        },
+        options: {
+          document: {
+            allowed_types: ["driving_license", "passport", "id_card"],
+            require_matching_selfie: true,
+          },
+        },
+      });
+      
+      // Store the session ID
+      await storage.updateDriverProfile(userId, {
+        identityVerificationSessionId: verificationSession.id,
+        identityVerificationStatus: "requires_input",
+      });
+      
+      res.json({ 
+        clientSecret: verificationSession.client_secret,
+        sessionId: verificationSession.id,
+      });
+    } catch (error) {
+      console.error("Error creating identity verification session:", error);
+      res.status(500).json({ message: "Failed to create verification session" });
+    }
+  });
+
+  app.get("/api/identity/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getDriverProfile(userId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      
+      // If we have a session ID, check the latest status from Stripe
+      if (profile.identityVerificationSessionId) {
+        const stripe = await getUncachableStripeClient();
+        const session = await stripe.identity.verificationSessions.retrieve(
+          profile.identityVerificationSessionId
+        );
+        
+        // Update local status if changed
+        // Map Stripe status to our local status
+        let newStatus = profile.identityVerificationStatus;
+        switch (session.status) {
+          case "verified":
+            newStatus = "verified";
+            break;
+          case "requires_input":
+          case "requires_action":
+            newStatus = "requires_input";
+            break;
+          case "canceled":
+            newStatus = "failed";
+            break;
+          case "processing":
+          case "requires_review":
+            newStatus = "pending";
+            break;
+          default:
+            // Keep current status for unknown states
+            break;
+        }
+        
+        if (newStatus !== profile.identityVerificationStatus) {
+          await storage.updateDriverProfile(userId, {
+            identityVerificationStatus: newStatus,
+            ...(newStatus === "verified" ? { identityVerifiedAt: new Date() } : {}),
+          });
+          
+          // If verified, sync to Onfleet
+          if (newStatus === "verified" && profile.phone && !profile.onfleetId) {
+            try {
+              const syncResult = await syncDriverToOnfleet({
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                phone: profile.phone,
+                streetAddress: profile.streetAddress,
+                city: profile.city,
+                province: profile.province,
+                postalCode: profile.postalCode,
+                googlePlaceId: profile.googlePlaceId,
+                vehicleMake: profile.vehicleMake,
+                vehicleModel: profile.vehicleModel,
+                vehicleYear: profile.vehicleYear,
+                vehicleColor: profile.vehicleColor,
+                licensePlate: profile.licensePlate,
+              });
+
+              if (syncResult.success && syncResult.onfleetId) {
+                await storage.updateDriverProfile(userId, {
+                  onfleetId: syncResult.onfleetId,
+                  onfleetSyncedAt: new Date(),
+                });
+                console.log(`Driver ${userId} identity verified and synced to Onfleet: ${syncResult.onfleetId}`);
+              }
+            } catch (onfleetError) {
+              console.error("Onfleet sync error after verification:", onfleetError);
+            }
+          }
+        }
+        
+        return res.json({ 
+          status: newStatus,
+          stripeStatus: session.status,
+        });
+      }
+      
+      res.json({ 
+        status: profile.identityVerificationStatus || null,
+      });
+    } catch (error) {
+      console.error("Error checking identity status:", error);
+      res.status(500).json({ message: "Failed to check verification status" });
+    }
+  });
+
+  app.get("/api/stripe/publishable-key", async (req, res) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      console.error("Error getting Stripe publishable key:", error);
+      res.status(500).json({ message: "Failed to get Stripe configuration" });
+    }
+  });
+
+  // Stripe Identity webhook handler
+  // In production, STRIPE_WEBHOOK_SECRET is required for signature verification
+  app.post("/api/webhooks/stripe-identity", express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      const isProduction = process.env.NODE_ENV === "production";
+      let event;
+      
+      // Require signature verification in production
+      if (isProduction && !endpointSecret) {
+        console.error("Webhook error: STRIPE_WEBHOOK_SECRET required in production");
+        return res.status(500).json({ error: "Webhook not configured" });
+      }
+      
+      // Verify webhook signature if secret is configured
+      if (endpointSecret) {
+        const sig = req.headers['stripe-signature'];
+        if (!sig) {
+          console.error("Webhook error: Missing stripe-signature header");
+          return res.status(400).json({ error: "Missing signature" });
+        }
+        try {
+          const stripe = await getUncachableStripeClient();
+          event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+        } catch (err: any) {
+          console.error("Webhook signature verification failed:", err.message);
+          return res.status(400).json({ error: "Invalid signature" });
+        }
+      } else {
+        // Development mode only - parse without verification
+        console.warn("DEV MODE: STRIPE_WEBHOOK_SECRET not configured - signatures not verified");
+        event = JSON.parse(req.body.toString());
+      }
+      
+      // Handle all identity verification session events
+      if (event.type.startsWith("identity.verification_session.")) {
+        const session = event.data.object;
+        const sessionId = session.id;
+        
+        // Find profile by session ID
+        const profiles = await storage.getAllDriverProfiles();
+        const profile = profiles.find(p => p.identityVerificationSessionId === sessionId);
+        
+        if (profile) {
+          let newStatus: string;
+          switch (session.status) {
+            case "verified":
+              newStatus = "verified";
+              break;
+            case "requires_input":
+            case "requires_action":
+              newStatus = "requires_input";
+              break;
+            case "canceled":
+              newStatus = "failed";
+              break;
+            case "processing":
+            case "requires_review":
+              newStatus = "pending";
+              break;
+            default:
+              newStatus = "pending";
+          }
+          
+          await storage.updateDriverProfileById(profile.id, {
+            identityVerificationStatus: newStatus,
+            ...(newStatus === "verified" ? { identityVerifiedAt: new Date() } : {}),
+          });
+          
+          // Sync to Onfleet if verified
+          if (newStatus === "verified" && profile.phone && !profile.onfleetId) {
+            try {
+              const syncResult = await syncDriverToOnfleet({
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                phone: profile.phone,
+                streetAddress: profile.streetAddress,
+                city: profile.city,
+                province: profile.province,
+                postalCode: profile.postalCode,
+                googlePlaceId: profile.googlePlaceId,
+                vehicleMake: profile.vehicleMake,
+                vehicleModel: profile.vehicleModel,
+                vehicleYear: profile.vehicleYear,
+                vehicleColor: profile.vehicleColor,
+                licensePlate: profile.licensePlate,
+              });
+
+              if (syncResult.success && syncResult.onfleetId) {
+                await storage.updateDriverProfileById(profile.id, {
+                  onfleetId: syncResult.onfleetId,
+                  onfleetSyncedAt: new Date(),
+                });
+                console.log(`Webhook: Driver ${profile.id} verified and synced to Onfleet: ${syncResult.onfleetId}`);
+              }
+            } catch (onfleetError) {
+              console.error("Webhook: Onfleet sync error:", onfleetError);
+            }
+          }
+          
+          console.log(`Webhook: Updated driver ${profile.id} verification status to ${newStatus}`);
+        }
+      }
+      
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ error: "Webhook processing failed" });
     }
   });
 

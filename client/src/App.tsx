@@ -14,6 +14,7 @@ import AgreementPage from "@/pages/agreement";
 import AdminPage from "@/pages/admin";
 import AvailabilityRespondPage from "@/pages/availability-respond";
 import AvailabilityPage from "@/pages/availability";
+import VerificationPage from "@/pages/verification";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function LoadingScreen() {
@@ -60,6 +61,9 @@ function Router() {
       </Route>
       <Route path="/respond/:token">
         <AvailabilityRespondPage />
+      </Route>
+      <Route path="/verification">
+        {user ? <VerificationPage /> : <LandingPage />}
       </Route>
       <Route component={NotFound} />
     </Switch>

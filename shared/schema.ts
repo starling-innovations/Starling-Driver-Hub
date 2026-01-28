@@ -36,6 +36,9 @@ export const driverProfiles = pgTable("driver_profiles", {
   approvalStatus: varchar("approval_status"), // pending, approved, rejected (null until onboarding completes)
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by"),
+  identityVerificationStatus: varchar("identity_verification_status"), // pending, verified, failed, requires_input (null until admin approves)
+  identityVerificationSessionId: text("identity_verification_session_id"),
+  identityVerifiedAt: timestamp("identity_verified_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -15,7 +15,8 @@ import {
   CheckCircle2, 
   Clock,
   AlertCircle,
-  Calendar
+  Calendar,
+  Shield
 } from "lucide-react";
 import type { DriverProfile } from "@shared/schema";
 
@@ -121,13 +122,50 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {profile?.onboardingCompleted && (
+        {profile?.onboardingCompleted && profile?.approvalStatus !== "approved" && (
+          <Card className="border-yellow-500/20 bg-yellow-500/5">
+            <CardContent className="p-4 flex items-center gap-3">
+              <Clock className="h-5 w-5 text-yellow-600" />
+              <div>
+                <p className="font-medium text-sm">Pending Approval</p>
+                <p className="text-xs text-muted-foreground">Your application is being reviewed by our team.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {profile?.approvalStatus === "approved" && profile?.identityVerificationStatus !== "verified" && (
+          <Card 
+            className="border-blue-500/20 bg-blue-500/5 hover-elevate cursor-pointer" 
+            onClick={() => setLocation("/verification")}
+            data-testid="card-verification"
+          >
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="font-medium text-sm">Complete Identity Verification</p>
+                  <p className="text-xs text-muted-foreground">
+                    {profile?.identityVerificationStatus === "requires_input" 
+                      ? "Continue your verification to get started"
+                      : profile?.identityVerificationStatus === "failed"
+                      ? "Verification failed - please try again"
+                      : "Verify your identity to start accepting deliveries"}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        )}
+
+        {profile?.identityVerificationStatus === "verified" && (
           <Card className="border-green-500/20 bg-green-500/5">
             <CardContent className="p-4 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-sm">Onboarding Complete</p>
-                <p className="text-xs text-muted-foreground">You're all set to start driving!</p>
+                <p className="font-medium text-sm">Ready to Drive</p>
+                <p className="text-xs text-muted-foreground">Your identity is verified. You're all set!</p>
               </div>
             </CardContent>
           </Card>
