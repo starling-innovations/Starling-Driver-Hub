@@ -126,6 +126,7 @@ export async function updateWorker(
     const updatePayload: any = {};
     if (data.name) updatePayload.name = data.name;
     if (data.vehicle) updatePayload.vehicle = data.vehicle;
+    if (data.addresses) updatePayload.addresses = data.addresses;
 
     const response = await fetch(`${ONFLEET_BASE_URL}/workers/${workerId}`, {
       method: "PUT",
@@ -178,7 +179,42 @@ export async function syncDriverToOnfleet(profile: {
     const existingWorker = await findWorkerByPhone(profile.phone);
 
     if (existingWorker) {
-      console.log(`Found existing Onfleet worker: ${existingWorker.id}`);
+      console.log(`Found existing Onfleet worker: ${existingWorker.id}, updating profile...`);
+      
+      const vehicleDescription = [
+        profile.vehicleYear,
+        profile.vehicleMake,
+        profile.vehicleModel,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const updatePayload: any = {
+        name: `${profile.firstName} ${profile.lastName} ONT_STR`,
+        vehicle: {
+          type: "CAR",
+          description: vehicleDescription || undefined,
+          licensePlate: profile.licensePlate || undefined,
+          color: profile.vehicleColor || undefined,
+        },
+      };
+
+      if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
+        updatePayload.addresses = {
+          routing: {
+            address: {
+              street: profile.streetAddress,
+              city: profile.city,
+              state: profile.province,
+              postalCode: profile.postalCode,
+              country: "Canada",
+            },
+          },
+        };
+      }
+
+      await updateWorker(existingWorker.id, updatePayload);
+      
       return {
         success: true,
         onfleetId: existingWorker.id,
