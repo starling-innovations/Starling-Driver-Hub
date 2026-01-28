@@ -32,6 +32,7 @@ interface CreateWorkerData {
   };
   addresses?: {
     routing: {
+      location: [number, number];
       address: {
         number?: string;
         street?: string;
@@ -59,6 +60,31 @@ function formatPhoneForOnfleet(phone: string): string {
     return "+" + cleaned;
   }
   return phone;
+}
+
+async function getCoordinatesFromPlaceId(placeId: string): Promise<[number, number] | null> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    console.error("Google Places API key not configured");
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=geometry&key=${apiKey}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "OK" && data.result?.geometry?.location) {
+      const location = data.result.geometry.location;
+      return [location.lng, location.lat];
+    }
+    console.error("Place details lookup failed:", data.status);
+    return null;
+  } catch (error) {
+    console.error("Error getting place coordinates:", error);
+    return null;
+  }
 }
 
 export async function findWorkerByPhone(phone: string): Promise<OnfleetWorker | null> {
@@ -165,6 +191,7 @@ export async function syncDriverToOnfleet(profile: {
   city?: string | null;
   province?: string | null;
   postalCode?: string | null;
+  googlePlaceId?: string | null;
   vehicleMake?: string | null;
   vehicleModel?: string | null;
   vehicleYear?: string | null;
@@ -199,18 +226,23 @@ export async function syncDriverToOnfleet(profile: {
         },
       };
 
-      if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
-        updatePayload.addresses = {
-          routing: {
-            address: {
-              street: profile.streetAddress,
-              city: profile.city,
-              state: profile.province,
-              postalCode: profile.postalCode,
-              country: "Canada",
+      if (profile.streetAddress && profile.city && profile.province && profile.postalCode && profile.googlePlaceId) {
+        const coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+        
+        if (coordinates) {
+          updatePayload.addresses = {
+            routing: {
+              location: coordinates,
+              address: {
+                street: profile.streetAddress,
+                city: profile.city,
+                state: profile.province,
+                postalCode: profile.postalCode,
+                country: "Canada",
+              },
             },
-          },
-        };
+          };
+        }
       }
 
       await updateWorker(existingWorker.id, updatePayload);
@@ -242,18 +274,23 @@ export async function syncDriverToOnfleet(profile: {
       },
     };
 
-    if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
-      workerData.addresses = {
-        routing: {
-          address: {
-            street: profile.streetAddress,
-            city: profile.city,
-            state: profile.province,
-            postalCode: profile.postalCode,
-            country: "Canada",
+    if (profile.streetAddress && profile.city && profile.province && profile.postalCode && profile.googlePlaceId) {
+      const coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+      
+      if (coordinates) {
+        workerData.addresses = {
+          routing: {
+            location: coordinates,
+            address: {
+              street: profile.streetAddress,
+              city: profile.city,
+              state: profile.province,
+              postalCode: profile.postalCode,
+              country: "Canada",
+            },
           },
-        },
-      };
+        };
+      }
     }
 
     const newWorker = await createWorker(workerData);

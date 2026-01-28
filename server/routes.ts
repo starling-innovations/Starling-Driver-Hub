@@ -170,6 +170,7 @@ export async function registerRoutes(
             city: updatedProfile.city,
             province: updatedProfile.province,
             postalCode: updatedProfile.postalCode,
+            googlePlaceId: updatedProfile.googlePlaceId,
             vehicleMake: updatedProfile.vehicleMake,
             vehicleModel: updatedProfile.vehicleModel,
             vehicleYear: updatedProfile.vehicleYear,
