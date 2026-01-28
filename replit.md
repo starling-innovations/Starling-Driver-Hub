@@ -98,6 +98,16 @@ When onboarding completes, the system syncs the driver to Onfleet:
 - `GET /api/auth/user` - Get authenticated user
 - `GET /api/login` - Initiate login flow
 - `GET /api/logout` - Logout and end session
+- `GET /api/admin/users` - Get all users with their profiles (admin view)
+
+## Admin Features
+
+### Admin Dashboard (`/admin`)
+- View all registered users and their information
+- See last login times for each user
+- Track onboarding completion status (Completed, Step X/4, No Profile)
+- Monitor Onfleet sync status for each driver
+- Summary cards showing total users, completed, in-progress, and no-profile counts
 
 ## Development
 
