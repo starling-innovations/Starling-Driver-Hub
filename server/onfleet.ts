@@ -32,10 +32,11 @@ interface CreateWorkerData {
   };
   addresses?: {
     routing: {
-      location: [number, number];
+      location?: [number, number];
       address: {
         number?: string;
         street?: string;
+        apartment?: string;
         city?: string;
         state?: string;
         postalCode?: string;
@@ -60,6 +61,14 @@ function formatPhoneForOnfleet(phone: string): string {
     return "+" + cleaned;
   }
   return phone;
+}
+
+function parseStreetAddress(streetAddress: string): { number: string; street: string } {
+  const match = streetAddress.match(/^(\d+[-\d]*)\s+(.+)$/);
+  if (match) {
+    return { number: match[1], street: match[2] };
+  }
+  return { number: "", street: streetAddress };
 }
 
 async function getCoordinatesFromPlaceId(placeId: string): Promise<[number, number] | null> {
@@ -226,23 +235,30 @@ export async function syncDriverToOnfleet(profile: {
         },
       };
 
-      if (profile.streetAddress && profile.city && profile.province && profile.postalCode && profile.googlePlaceId) {
-        const coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+      if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
+        const addressParts = parseStreetAddress(profile.streetAddress);
+        let coordinates: [number, number] | null = null;
+        
+        if (profile.googlePlaceId) {
+          coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+        }
+        
+        const routingAddress: any = {
+          address: {
+            number: addressParts.number,
+            street: addressParts.street,
+            city: profile.city,
+            state: profile.province,
+            postalCode: profile.postalCode,
+            country: "Canada",
+          },
+        };
         
         if (coordinates) {
-          updatePayload.addresses = {
-            routing: {
-              location: coordinates,
-              address: {
-                street: profile.streetAddress,
-                city: profile.city,
-                state: profile.province,
-                postalCode: profile.postalCode,
-                country: "Canada",
-              },
-            },
-          };
+          routingAddress.location = coordinates;
         }
+        
+        updatePayload.addresses = { routing: routingAddress };
       }
 
       await updateWorker(existingWorker.id, updatePayload);
@@ -274,23 +290,30 @@ export async function syncDriverToOnfleet(profile: {
       },
     };
 
-    if (profile.streetAddress && profile.city && profile.province && profile.postalCode && profile.googlePlaceId) {
-      const coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+    if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
+      const addressParts = parseStreetAddress(profile.streetAddress);
+      let coordinates: [number, number] | null = null;
+      
+      if (profile.googlePlaceId) {
+        coordinates = await getCoordinatesFromPlaceId(profile.googlePlaceId);
+      }
+      
+      const routingAddress: any = {
+        address: {
+          number: addressParts.number,
+          street: addressParts.street,
+          city: profile.city,
+          state: profile.province,
+          postalCode: profile.postalCode,
+          country: "Canada",
+        },
+      };
       
       if (coordinates) {
-        workerData.addresses = {
-          routing: {
-            location: coordinates,
-            address: {
-              street: profile.streetAddress,
-              city: profile.city,
-              state: profile.province,
-              postalCode: profile.postalCode,
-              country: "Canada",
-            },
-          },
-        };
+        routingAddress.location = coordinates;
       }
+      
+      workerData.addresses = { routing: routingAddress };
     }
 
     const newWorker = await createWorker(workerData);
