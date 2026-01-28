@@ -118,8 +118,9 @@ export default function VehiclePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
       toast({
         title: "Vehicle Updated",
-        description: "Your vehicle information has been saved.",
+        description: "Your vehicle information has been saved and synced.",
       });
+      setLocation("/");
     },
     onError: (error: Error) => {
       toast({

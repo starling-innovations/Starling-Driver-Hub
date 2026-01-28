@@ -193,8 +193,9 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
       toast({
         title: "Profile Updated",
-        description: "Your changes have been saved successfully.",
+        description: "Your changes have been saved and synced.",
       });
+      setLocation("/");
     },
     onError: (error: Error) => {
       toast({

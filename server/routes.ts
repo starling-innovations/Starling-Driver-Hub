@@ -160,12 +160,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Profile not found" });
       }
 
-      if (updateData.onboardingCompleted && !updatedProfile.onfleetId) {
+      if (updatedProfile.onboardingCompleted && updatedProfile.phone) {
         try {
           const syncResult = await syncDriverToOnfleet({
             firstName: updatedProfile.firstName,
             lastName: updatedProfile.lastName,
-            phone: updatedProfile.phone!,
+            phone: updatedProfile.phone,
             streetAddress: updatedProfile.streetAddress,
             city: updatedProfile.city,
             province: updatedProfile.province,
