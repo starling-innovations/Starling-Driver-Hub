@@ -22,23 +22,21 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1 px-4 py-8 space-y-10">
-        <section className="text-center space-y-4">
+        <section className="text-center space-y-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
             <Star className="w-3.5 h-3.5" />
             <span>Join 500+ drivers</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight leading-tight">
-            Drive with Starling,
-            <br />
-            <span className="text-primary">Earn on Your Terms</span>
+          <h1 className="text-4xl font-bold tracking-tight leading-tight">
+            Drive with Starling
           </h1>
           <p className="text-muted-foreground text-base max-w-sm mx-auto">
             Become a Starling Driver Partner and enjoy flexible hours, competitive pay, and the freedom to work when you want.
           </p>
-          <div className="pt-2">
-            <a href="/api/login">
-              <Button size="lg" className="w-full max-w-xs" data-testid="button-get-started">
-                Get Started
+          <div className="pt-4 space-y-3 max-w-xs mx-auto">
+            <a href="/api/login" className="block">
+              <Button size="lg" className="w-full" data-testid="button-get-started">
+                Sign In / Create Account
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </a>
