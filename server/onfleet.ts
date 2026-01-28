@@ -30,6 +30,18 @@ interface CreateWorkerData {
     licensePlate?: string;
     color?: string;
   };
+  addresses?: {
+    routing: {
+      address: {
+        number?: string;
+        street?: string;
+        city?: string;
+        state?: string;
+        postalCode?: string;
+        country?: string;
+      };
+    };
+  };
 }
 
 function getAuthHeader(): string {
@@ -89,6 +101,7 @@ export async function createWorker(data: CreateWorkerData): Promise<OnfleetWorke
         phone: formatPhoneForOnfleet(data.phone),
         teams: data.teams,
         vehicle: data.vehicle,
+        addresses: data.addresses,
       }),
     });
 
@@ -147,6 +160,10 @@ export async function syncDriverToOnfleet(profile: {
   firstName: string;
   lastName: string;
   phone: string;
+  streetAddress?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
   vehicleMake?: string | null;
   vehicleModel?: string | null;
   vehicleYear?: string | null;
@@ -178,7 +195,7 @@ export async function syncDriverToOnfleet(profile: {
       .join(" ");
 
     const workerData: CreateWorkerData = {
-      name: `${profile.firstName} ${profile.lastName}`,
+      name: `${profile.firstName} ${profile.lastName} ONT_STR`,
       phone: profile.phone,
       teams: [DEFAULT_TEAM_ID],
       vehicle: {
@@ -188,6 +205,20 @@ export async function syncDriverToOnfleet(profile: {
         color: profile.vehicleColor || undefined,
       },
     };
+
+    if (profile.streetAddress && profile.city && profile.province && profile.postalCode) {
+      workerData.addresses = {
+        routing: {
+          address: {
+            street: profile.streetAddress,
+            city: profile.city,
+            state: profile.province,
+            postalCode: profile.postalCode,
+            country: "Canada",
+          },
+        },
+      };
+    }
 
     const newWorker = await createWorker(workerData);
 
