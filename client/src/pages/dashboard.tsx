@@ -14,7 +14,8 @@ import {
   LogOut, 
   CheckCircle2, 
   Clock,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from "lucide-react";
 import type { DriverProfile } from "@shared/schema";
 
@@ -201,6 +202,29 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+
+          {profile?.onboardingCompleted && (
+            <Card 
+              className="hover-elevate cursor-pointer" 
+              onClick={() => setLocation("/availability")}
+              data-testid="card-availability"
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">My Availability</p>
+                    <p className="text-xs text-muted-foreground">
+                      Manage your route availability
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {!profile && (

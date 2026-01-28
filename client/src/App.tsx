@@ -13,6 +13,7 @@ import VehiclePage from "@/pages/vehicle";
 import AgreementPage from "@/pages/agreement";
 import AdminPage from "@/pages/admin";
 import AvailabilityRespondPage from "@/pages/availability-respond";
+import AvailabilityPage from "@/pages/availability";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function LoadingScreen() {
@@ -53,6 +54,9 @@ function Router() {
       </Route>
       <Route path="/admin">
         {user ? <AdminPage /> : <LandingPage />}
+      </Route>
+      <Route path="/availability">
+        {user ? <AvailabilityPage /> : <LandingPage />}
       </Route>
       <Route path="/respond/:token">
         <AvailabilityRespondPage />

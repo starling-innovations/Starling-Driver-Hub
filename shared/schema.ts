@@ -37,7 +37,30 @@ export const driverProfiles = pgTable("driver_profiles", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const driverProfilesRelations = relations(driverProfiles, ({ one }) => ({
+export const driverProfilesRelations = relations(driverProfiles, ({ many }) => ({
+  availability: many(driverAvailability),
+}));
+
+export const driverAvailability = pgTable("driver_availability", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverProfileId: varchar("driver_profile_id").notNull().references(() => driverProfiles.id),
+  date: varchar("date").notNull(), // YYYY-MM-DD format
+  status: varchar("status").notNull(), // "available", "unavailable", "pending"
+  notes: text("notes"),
+  thermalBlanket: boolean("thermal_blanket").default(false),
+  thermalBag: boolean("thermal_bag").default(false),
+  otherPackaging: boolean("other_packaging").default(false),
+  responseToken: varchar("response_token"), // Link to external availability request
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const driverAvailabilityRelations = relations(driverAvailability, ({ one }) => ({
+  driverProfile: one(driverProfiles, {
+    fields: [driverAvailability.driverProfileId],
+    references: [driverProfiles.id],
+  }),
 }));
 
 export const insertDriverProfileSchema = createInsertSchema(driverProfiles).omit({
@@ -56,3 +79,20 @@ export const updateDriverProfileSchema = createInsertSchema(driverProfiles).omit
 export type InsertDriverProfile = z.infer<typeof insertDriverProfileSchema>;
 export type UpdateDriverProfile = z.infer<typeof updateDriverProfileSchema>;
 export type DriverProfile = typeof driverProfiles.$inferSelect;
+
+export const insertDriverAvailabilitySchema = createInsertSchema(driverAvailability).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateDriverAvailabilitySchema = createInsertSchema(driverAvailability).omit({
+  id: true,
+  driverProfileId: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type InsertDriverAvailability = z.infer<typeof insertDriverAvailabilitySchema>;
+export type UpdateDriverAvailability = z.infer<typeof updateDriverAvailabilitySchema>;
+export type DriverAvailability = typeof driverAvailability.$inferSelect;

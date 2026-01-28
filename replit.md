@@ -68,6 +68,19 @@ shared/
 3. **Vehicle**: Make, model, year, color, license plate
 4. **Agreement**: Review and sign the Driver Partner Agreement
 
+### Availability Calendar
+- Drivers can proactively mark dates as available/unavailable
+- Calendar view with month navigation
+- Can specify packaging equipment (thermal blanket, thermal bag, other)
+- Add notes for specific dates
+- Data shared with admin app via external API
+
+### Availability Response Links
+- Drivers receive SMS links for specific dates (from admin app)
+- Links route to `/respond/:token` for quick responses
+- Drivers can mark available/unavailable with packaging info
+- Responses stored locally and synced to admin app
+
 ### Database Schema
 
 **driver_profiles**
@@ -78,6 +91,13 @@ shared/
 - Onboarding progress tracking
 - Agreement signing status
 - Onfleet integration (onfleetId, onfleetSyncedAt)
+
+**driver_availability**
+- Date-based availability records
+- Status: available, unavailable, pending
+- Packaging equipment flags
+- Optional notes
+- Response timestamps
 
 ### Onfleet Integration
 
@@ -92,13 +112,26 @@ When onboarding completes, the system syncs the driver to Onfleet:
 
 ## API Endpoints
 
+### Driver Endpoints (Authenticated)
 - `GET /api/profile` - Get current driver's profile
 - `POST /api/profile` - Create new driver profile
-- `PATCH /api/profile` - Update driver profile
+- `PATCH /api/profile` - Update driver profile (triggers Onfleet sync)
+- `GET /api/availability` - Get driver's availability calendar
+- `POST /api/availability` - Set availability for a date
 - `GET /api/auth/user` - Get authenticated user
 - `GET /api/login` - Initiate login flow
 - `GET /api/logout` - Logout and end session
+
+### Admin Endpoints
 - `GET /api/admin/users` - Get all users with their profiles (admin view)
+
+### External API (Requires X-API-Key header)
+- `GET /api/external/availability/:onfleetId` - Get driver availability by Onfleet ID
+- `GET /api/external/availability-by-phone/:phone` - Get driver availability by phone
+
+### Availability Response Proxy (Public)
+- `GET /api/availability-response/:token` - Get availability request details
+- `POST /api/availability-response/:token` - Submit availability response
 
 ## Admin Features
 

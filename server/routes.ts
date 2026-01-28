@@ -262,6 +262,153 @@ export async function registerRoutes(
     }
   });
 
+  // Driver availability endpoints
+  app.get("/api/availability", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getDriverProfile(userId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      
+      const { startDate, endDate } = req.query;
+      const availability = await storage.getDriverAvailability(
+        profile.id,
+        startDate as string,
+        endDate as string
+      );
+      
+      res.json(availability);
+    } catch (error) {
+      console.error("Error fetching availability:", error);
+      res.status(500).json({ message: "Failed to fetch availability" });
+    }
+  });
+
+  const availabilityInputSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+    status: z.enum(["available", "unavailable", "pending"]),
+    notes: z.string().optional().nullable(),
+    thermalBlanket: z.boolean().optional(),
+    thermalBag: z.boolean().optional(),
+    otherPackaging: z.boolean().optional(),
+  });
+
+  app.post("/api/availability", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getDriverProfile(userId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      
+      const validated = availabilityInputSchema.parse(req.body);
+      
+      const availability = await storage.upsertDriverAvailability(profile.id, validated.date, {
+        status: validated.status,
+        notes: validated.notes,
+        thermalBlanket: validated.thermalBlanket,
+        thermalBag: validated.thermalBag,
+        otherPackaging: validated.otherPackaging,
+        respondedAt: new Date(),
+      });
+      
+      res.json(availability);
+    } catch (error) {
+      console.error("Error updating availability:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update availability" });
+    }
+  });
+
+  // External API for admin app to read driver availability
+  const driverAppApiKey = process.env.DRIVER_APP_API_KEY;
+
+  const validateApiKey = (req: any, res: any, next: any) => {
+    const apiKey = req.headers["x-api-key"];
+    if (!driverAppApiKey || apiKey !== driverAppApiKey) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    next();
+  };
+
+  app.get("/api/external/availability/:onfleetId", validateApiKey, async (req, res) => {
+    try {
+      const { onfleetId } = req.params;
+      const { startDate, endDate } = req.query;
+      
+      const profile = await storage.getDriverProfileByOnfleetId(onfleetId);
+      if (!profile) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      const availability = await storage.getDriverAvailability(
+        profile.id,
+        startDate as string,
+        endDate as string
+      );
+      
+      res.json({
+        driver: {
+          id: profile.id,
+          name: `${profile.firstName} ${profile.lastName}`,
+          phone: profile.phone,
+          onfleetId: profile.onfleetId,
+        },
+        availability,
+      });
+    } catch (error) {
+      console.error("Error fetching external availability:", error);
+      res.status(500).json({ message: "Failed to fetch availability" });
+    }
+  });
+
+  app.get("/api/external/availability-by-phone/:phone", validateApiKey, async (req, res) => {
+    try {
+      const { phone } = req.params;
+      const { startDate, endDate } = req.query;
+      
+      // Try multiple phone formats for lookup
+      const normalizedPhone = phone.replace(/\D/g, "");
+      const formattedPhone = normalizedPhone.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+      
+      let profile = await storage.getDriverProfileByPhone(phone);
+      if (!profile) {
+        profile = await storage.getDriverProfileByPhone(normalizedPhone);
+      }
+      if (!profile) {
+        profile = await storage.getDriverProfileByPhone(formattedPhone);
+      }
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      const availability = await storage.getDriverAvailability(
+        profile.id,
+        startDate as string,
+        endDate as string
+      );
+      
+      res.json({
+        driver: {
+          id: profile.id,
+          name: `${profile.firstName} ${profile.lastName}`,
+          phone: profile.phone,
+          onfleetId: profile.onfleetId,
+        },
+        availability,
+      });
+    } catch (error) {
+      console.error("Error fetching external availability by phone:", error);
+      res.status(500).json({ message: "Failed to fetch availability" });
+    }
+  });
+
   // Availability response proxy routes
   const availabilityApiUrl = process.env.AVAILABILITY_API_URL;
 

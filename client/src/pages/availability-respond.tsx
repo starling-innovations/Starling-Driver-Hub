@@ -239,8 +239,8 @@ export default function AvailabilityRespondPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 pb-6">
         <div className="max-w-md mx-auto flex gap-3">
           <Button
-            variant="outline"
-            className="flex-1 h-14 text-base border-destructive text-destructive hover:bg-destructive/10"
+            variant="destructive"
+            className="flex-1 h-14 text-base"
             onClick={() => respondMutation.mutate("unavailable")}
             disabled={respondMutation.isPending}
             data-testid="button-unavailable"
@@ -255,7 +255,7 @@ export default function AvailabilityRespondPage() {
             )}
           </Button>
           <Button
-            className="flex-1 h-14 text-base bg-green-600 hover:bg-green-700"
+            className="flex-1 h-14 text-base"
             onClick={() => respondMutation.mutate("available")}
             disabled={respondMutation.isPending}
             data-testid="button-available"
