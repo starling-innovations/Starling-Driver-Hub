@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { updateDriverProfileSchema } from "@shared/schema";
 import { z } from "zod";
+import { syncDriverToOnfleet } from "./onfleet";
 
 const canadianPhoneRegex = /^(\+1)?[\s.-]?\(?[2-9]\d{2}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/;
 
@@ -153,10 +154,41 @@ export async function registerRoutes(
       }
 
       const validated = updateDriverProfileSchema.parse(updateData);
-      const updatedProfile = await storage.updateDriverProfile(userId, validated);
+      let updatedProfile = await storage.updateDriverProfile(userId, validated);
       
       if (!updatedProfile) {
         return res.status(404).json({ message: "Profile not found" });
+      }
+
+      if (updateData.onboardingCompleted && !updatedProfile.onfleetId) {
+        try {
+          const syncResult = await syncDriverToOnfleet({
+            firstName: updatedProfile.firstName,
+            lastName: updatedProfile.lastName,
+            phone: updatedProfile.phone!,
+            vehicleMake: updatedProfile.vehicleMake,
+            vehicleModel: updatedProfile.vehicleModel,
+            vehicleYear: updatedProfile.vehicleYear,
+            vehicleColor: updatedProfile.vehicleColor,
+            licensePlate: updatedProfile.licensePlate,
+          });
+
+          if (syncResult.success && syncResult.onfleetId) {
+            updatedProfile = await storage.updateDriverProfile(userId, {
+              onfleetId: syncResult.onfleetId,
+              onfleetSyncedAt: new Date(),
+            });
+            console.log(
+              `Driver ${userId} synced to Onfleet: ${syncResult.onfleetId} (${
+                syncResult.isExisting ? "existing" : "new"
+              } worker)`
+            );
+          } else {
+            console.error(`Failed to sync driver ${userId} to Onfleet:`, syncResult.error);
+          }
+        } catch (onfleetError) {
+          console.error("Onfleet sync error:", onfleetError);
+        }
       }
       
       res.json(updatedProfile);

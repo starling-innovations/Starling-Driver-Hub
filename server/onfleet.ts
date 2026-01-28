@@ -1,0 +1,210 @@
+const ONFLEET_API_KEY = process.env.STARLING_STAGING_API_KEY;
+const ONFLEET_BASE_URL = "https://onfleet.com/api/v2";
+const DEFAULT_TEAM_ID = "BPFsaTGXIHgF90hxup3XikF2";
+
+interface OnfleetVehicle {
+  id?: string;
+  type: "CAR" | "MOTORCYCLE" | "BICYCLE" | "TRUCK";
+  description?: string;
+  licensePlate?: string;
+  color?: string;
+}
+
+interface OnfleetWorker {
+  id: string;
+  name: string;
+  phone: string;
+  teams: string[];
+  vehicle?: OnfleetVehicle;
+  onDuty?: boolean;
+  metadata?: any[];
+}
+
+interface CreateWorkerData {
+  name: string;
+  phone: string;
+  teams: string[];
+  vehicle?: {
+    type: "CAR" | "MOTORCYCLE" | "BICYCLE" | "TRUCK";
+    description?: string;
+    licensePlate?: string;
+    color?: string;
+  };
+}
+
+function getAuthHeader(): string {
+  if (!ONFLEET_API_KEY) {
+    throw new Error("Onfleet API key not configured");
+  }
+  return "Basic " + Buffer.from(ONFLEET_API_KEY + ":").toString("base64");
+}
+
+function formatPhoneForOnfleet(phone: string): string {
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 10) {
+    return "+1" + cleaned;
+  } else if (cleaned.length === 11 && cleaned.startsWith("1")) {
+    return "+" + cleaned;
+  }
+  return phone;
+}
+
+export async function findWorkerByPhone(phone: string): Promise<OnfleetWorker | null> {
+  try {
+    const formattedPhone = formatPhoneForOnfleet(phone);
+    const response = await fetch(
+      `${ONFLEET_BASE_URL}/workers?phones=${encodeURIComponent(formattedPhone)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: getAuthHeader(),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Onfleet API error finding worker:", errorData);
+      return null;
+    }
+
+    const workers: OnfleetWorker[] = await response.json();
+    return workers.length > 0 ? workers[0] : null;
+  } catch (error) {
+    console.error("Error finding worker by phone:", error);
+    return null;
+  }
+}
+
+export async function createWorker(data: CreateWorkerData): Promise<OnfleetWorker | null> {
+  try {
+    const response = await fetch(`${ONFLEET_BASE_URL}/workers`, {
+      method: "POST",
+      headers: {
+        Authorization: getAuthHeader(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: data.name,
+        phone: formatPhoneForOnfleet(data.phone),
+        teams: data.teams,
+        vehicle: data.vehicle,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Onfleet API error creating worker:", errorData);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error creating worker:", error);
+    return null;
+  }
+}
+
+export async function updateWorker(
+  workerId: string,
+  data: Partial<CreateWorkerData>
+): Promise<OnfleetWorker | null> {
+  try {
+    const updatePayload: any = {};
+    if (data.name) updatePayload.name = data.name;
+    if (data.vehicle) updatePayload.vehicle = data.vehicle;
+
+    const response = await fetch(`${ONFLEET_BASE_URL}/workers/${workerId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: getAuthHeader(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updatePayload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Onfleet API error updating worker:", errorData);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating worker:", error);
+    return null;
+  }
+}
+
+export interface SyncResult {
+  success: boolean;
+  onfleetId?: string;
+  isExisting: boolean;
+  error?: string;
+}
+
+export async function syncDriverToOnfleet(profile: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  vehicleMake?: string | null;
+  vehicleModel?: string | null;
+  vehicleYear?: string | null;
+  vehicleColor?: string | null;
+  licensePlate?: string | null;
+}): Promise<SyncResult> {
+  if (!profile.phone) {
+    return { success: false, isExisting: false, error: "Phone number is required" };
+  }
+
+  try {
+    const existingWorker = await findWorkerByPhone(profile.phone);
+
+    if (existingWorker) {
+      console.log(`Found existing Onfleet worker: ${existingWorker.id}`);
+      return {
+        success: true,
+        onfleetId: existingWorker.id,
+        isExisting: true,
+      };
+    }
+
+    const vehicleDescription = [
+      profile.vehicleYear,
+      profile.vehicleMake,
+      profile.vehicleModel,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const workerData: CreateWorkerData = {
+      name: `${profile.firstName} ${profile.lastName}`,
+      phone: profile.phone,
+      teams: [DEFAULT_TEAM_ID],
+      vehicle: {
+        type: "CAR",
+        description: vehicleDescription || undefined,
+        licensePlate: profile.licensePlate || undefined,
+        color: profile.vehicleColor || undefined,
+      },
+    };
+
+    const newWorker = await createWorker(workerData);
+
+    if (newWorker) {
+      console.log(`Created new Onfleet worker: ${newWorker.id}`);
+      return {
+        success: true,
+        onfleetId: newWorker.id,
+        isExisting: false,
+      };
+    }
+
+    return { success: false, isExisting: false, error: "Failed to create worker in Onfleet" };
+  } catch (error) {
+    console.error("Error syncing driver to Onfleet:", error);
+    return { success: false, isExisting: false, error: String(error) };
+  }
+}
+
+export { DEFAULT_TEAM_ID };

@@ -31,6 +31,8 @@ export const driverProfiles = pgTable("driver_profiles", {
   onboardingStep: integer("onboarding_step").default(1),
   agreementSigned: boolean("agreement_signed").default(false),
   agreementSignedAt: timestamp("agreement_signed_at"),
+  onfleetId: text("onfleet_id"),
+  onfleetSyncedAt: timestamp("onfleet_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

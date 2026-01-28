@@ -17,6 +17,7 @@ This application provides:
 - **Google Places API**: Address autocomplete with Canadian addresses only
 - **Vehicle Photos**: Required photos of vehicle and license plate (base64 stored)
 - **Dropbox Sign**: Agreement must be signed at https://app.hellosign.com/s/EzWAyRrV
+- **Onfleet Integration**: Sync drivers to Onfleet when onboarding completes
 
 ## Tech Stack
 
@@ -49,6 +50,7 @@ server/
   routes.ts            - API endpoints
   storage.ts           - Database operations
   db.ts                - Database connection
+  onfleet.ts           - Onfleet API integration
   replit_integrations/
     auth/              - Replit Auth integration
 
@@ -75,6 +77,18 @@ shared/
 - Vehicle information
 - Onboarding progress tracking
 - Agreement signing status
+- Onfleet integration (onfleetId, onfleetSyncedAt)
+
+### Onfleet Integration
+
+When onboarding completes, the system syncs the driver to Onfleet:
+1. **Check if worker exists** - Looks up by phone number using `GET /workers?phones=`
+2. **If exists** - Stores the Onfleet worker ID (existing drivers migrate seamlessly)
+3. **If not exists** - Creates a new worker with name, phone, vehicle details
+
+**Configuration:**
+- API Key: `STARLING_STAGING_API_KEY` (stored as secret)
+- Default Team: CookUnity Staging (`BPFsaTGXIHgF90hxup3XikF2`)
 
 ## API Endpoints
 
