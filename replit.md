@@ -8,7 +8,15 @@ This application provides:
 - **Secure Authentication**: Login with Google, GitHub, Apple, email via Replit Auth
 - **Driver Profiles**: Personal info, address, e-transfer email, vehicle details
 - **Onboarding Wizard**: Step-by-step guide for new drivers
-- **Agreement Signing**: Digital signing of Driver Partner Onboarding Agreement
+- **Agreement Signing**: External Dropbox Sign integration for Driver Partner Agreement
+
+## Key Requirements
+
+- **Canadian Phone Numbers**: Validated format (e.g., 416-555-1234)
+- **E-Transfer Auto-Deposit**: Drivers must confirm auto-deposit is enabled
+- **Google Places API**: Address autocomplete with Canadian addresses only
+- **Vehicle Photos**: Required photos of vehicle and license plate (base64 stored)
+- **Dropbox Sign**: Agreement must be signed at https://app.hellosign.com/s/EzWAyRrV
 
 ## Tech Stack
 

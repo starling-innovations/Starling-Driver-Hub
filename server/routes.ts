@@ -5,6 +5,40 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { updateDriverProfileSchema } from "@shared/schema";
 import { z } from "zod";
 
+const canadianPhoneRegex = /^(\+1)?[\s.-]?\(?[2-9]\d{2}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/;
+
+const step1ValidationSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().regex(canadianPhoneRegex, "Invalid Canadian phone number"),
+  etransferEmail: z.string().email(),
+  etransferAutoDepositConfirmed: z.literal(true, { 
+    errorMap: () => ({ message: "Auto-deposit must be confirmed" })
+  }),
+});
+
+const step2ValidationSchema = z.object({
+  streetAddress: z.string().min(1),
+  city: z.string().min(1),
+  province: z.string().min(1),
+  postalCode: z.string().min(1),
+});
+
+const step3ValidationSchema = z.object({
+  vehicleMake: z.string().min(1),
+  vehicleModel: z.string().min(1),
+  vehicleYear: z.string().min(1),
+  vehicleColor: z.string().min(1),
+  licensePlate: z.string().min(1),
+  vehiclePhotoUrl: z.string().min(1),
+  licensePlatePhotoUrl: z.string().min(1),
+});
+
+const step4ValidationSchema = z.object({
+  agreementSigned: z.literal(true),
+});
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -106,6 +140,18 @@ export async function registerRoutes(
       if (updateData.agreementSignedAt && typeof updateData.agreementSignedAt === 'string') {
         updateData.agreementSignedAt = new Date(updateData.agreementSignedAt);
       }
+
+      const targetStep = updateData.onboardingStep;
+      if (targetStep === 2) {
+        step1ValidationSchema.parse(updateData);
+      } else if (targetStep === 3) {
+        step2ValidationSchema.parse(updateData);
+      } else if (targetStep === 4) {
+        step3ValidationSchema.parse(updateData);
+      } else if (targetStep === 5 && updateData.onboardingCompleted) {
+        step4ValidationSchema.parse(updateData);
+      }
+
       const validated = updateDriverProfileSchema.parse(updateData);
       const updatedProfile = await storage.updateDriverProfile(userId, validated);
       
