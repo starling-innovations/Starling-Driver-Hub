@@ -225,7 +225,23 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", isAuthenticated, async (req: any, res) => {
+  // Admin authorization
+  const ADMIN_EMAILS = [
+    "hello@trystarling.com",
+    "sarah@trystarling.com",
+    "katie@trystarling.com",
+    "francesco@trystarling.com",
+  ];
+
+  const isAdmin = async (req: any, res: any, next: any) => {
+    const userEmail = req.user?.claims?.email;
+    if (!userEmail || !ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
+      return res.status(403).json({ message: "Access denied. Admin privileges required." });
+    }
+    next();
+  };
+
+  app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const usersWithProfiles = await storage.getAllUsersWithProfiles();
       res.json(usersWithProfiles);
@@ -236,7 +252,7 @@ export async function registerRoutes(
   });
 
   // Admin approval endpoints
-  app.post("/api/admin/approve/:profileId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/admin/approve/:profileId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { profileId } = req.params;
       const adminUserId = req.user.claims.sub;
@@ -301,7 +317,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/reject/:profileId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/admin/reject/:profileId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { profileId } = req.params;
       const adminUserId = req.user.claims.sub;
