@@ -1,0 +1,67 @@
+How Availability Links Work
+Link Structure
+https://driver.trystarling.com/respond/{token}
+token is a 32-character base64url encoded string (e.g., Abc123xyz789...)
+Generated using crypto.randomBytes(24).toString('base64url')
+What Data is Stored with Each Token
+{
+  token: string,              // The unique response token
+  onfleetWorkerId: string,    // Driver's OnFleet ID
+  workerName: string,         // Driver's name
+  workerPhone: string,        // Driver's phone number
+  date: string,               // Date in YYYY-MM-DD format
+  responded: boolean,         // Has driver responded?
+  response: string | null,    // "available" or "unavailable"
+  respondedAt: Date | null,   // When they first responded
+  notes: string | null,       // Driver's notes
+  thermalBlanket: boolean,    // Has thermal blanket
+  thermalBag: boolean,        // Has thermal bag
+  otherPackaging: boolean     // Has other packaging
+}
+API Endpoints (for Driver App)
+Option 1: Use the Response Token API (Public - No Auth)
+The Driver app can use the existing public endpoints:
+
+GET /api/availability-response/{token} - Get token details
+
+Response: {
+  "workerName": "John Smith",
+  "date": "2026-01-29",
+  "formattedDate": "Wednesday, January 29, 2026",
+  "responded": false,
+  "response": null,
+  "thermalBlanket": false,
+  "thermalBag": false,
+  "notes": null
+}
+POST /api/availability-response/{token} - Submit response
+
+Request: {
+  "response": "available",  // or "unavailable"
+  "notes": "Available after 10am",
+  "thermalBlanket": true,
+  "thermalBag": false,
+  "otherPackaging": false
+}
+Option 2: Use the Driver App API (Requires API Key)
+For authenticated driver actions:
+
+POST /api/driver-app/availability (requires X-API-Key header)
+
+Request: {
+  "onfleetWorkerId": "abc123",
+  "workerName": "John Smith",
+  "workerPhone": "+1234567890",
+  "date": "2026-01-29",
+  "status": "available",
+  "notes": "Available all day",
+  "thermalBlanket": true,
+  "thermalBag": false
+}
+Frontend Response Page Code
+The response page (/respond/{token}) shows:
+
+Driver name and date
+Packaging options (Thermal Blanket, Thermal Bag, Other)
+Notes field
+Available/Not Available buttons
