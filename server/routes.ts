@@ -262,5 +262,59 @@ export async function registerRoutes(
     }
   });
 
+  // Availability response proxy routes
+  const availabilityApiUrl = process.env.AVAILABILITY_API_URL;
+
+  app.get("/api/availability-response/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      if (!availabilityApiUrl) {
+        return res.status(500).json({ message: "Availability API not configured" });
+      }
+
+      const response = await fetch(`${availabilityApiUrl}/api/availability-response/${token}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return res.status(response.status).json(data);
+      }
+      
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching availability token:", error);
+      res.status(500).json({ message: "Failed to fetch availability request" });
+    }
+  });
+
+  app.post("/api/availability-response/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      if (!availabilityApiUrl) {
+        return res.status(500).json({ message: "Availability API not configured" });
+      }
+
+      const response = await fetch(`${availabilityApiUrl}/api/availability-response/${token}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(req.body),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return res.status(response.status).json(data);
+      }
+      
+      res.json(data);
+    } catch (error) {
+      console.error("Error submitting availability response:", error);
+      res.status(500).json({ message: "Failed to submit availability response" });
+    }
+  });
+
   return httpServer;
 }
