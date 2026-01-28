@@ -1,18 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Truck, Shield, DollarSign, Clock, ChevronRight, Star } from "lucide-react";
+import { Shield, DollarSign, Clock, ChevronRight, Star } from "lucide-react";
+import starlingLogo from "@assets/starling-logo-full-colour-digital_1769630846363.png";
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-              <Truck className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-lg">Starling</span>
-          </div>
+          <img src={starlingLogo} alt="Starling" className="h-8" />
           <a href="/api/login">
             <Button size="sm" data-testid="button-login-header">
               Sign In
@@ -23,10 +19,7 @@ export default function LandingPage() {
 
       <main className="flex-1 px-4 py-8 space-y-10">
         <section className="text-center space-y-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
-            <Star className="w-3.5 h-3.5" />
-            <span>Join 500+ drivers</span>
-          </div>
+          <img src={starlingLogo} alt="Starling" className="h-16 mx-auto" />
           <h1 className="text-4xl font-bold tracking-tight leading-tight">
             Drive with Starling
           </h1>
